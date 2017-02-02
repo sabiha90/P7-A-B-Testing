@@ -1,0 +1,269 @@
+---
+title: "AB_test"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+#Metric Choice
+###Invariant Metrics:
+
+- Number of cookies: The number of cookies will not change because the users will visit the page irrespective of the experiment.
+
+- Number of user-ids: This cannot be used as an invariant metric because the number of users who enroll in the course is dependent on the experiment and this value will be different in both the experiment and control groups. USer id count can be used if the students retained beyond the 14 day period but it is not normalized and can skew the results.
+
+- Number of clicks: The number of clicks will happen before the experiment starts and therefore, is independent of the experiment.
+
+- Click-through-probability: This metric is also independent of the experiment since this event occurs before the users see the experiment.
+
+###Evaluation metric:
+
+- Gross conversion: This metric is not a good invariant metric because the enrolled users are dependent on the experiment.This metric is dependent on the experiment and the outcome of the experiment will directly impact the gross conversion. It can be used to check if the experiment made any significant difference in the enrollments.
+
+- Retention: This metric is not a good invariant metric because the enrolled users are dependent on the experiment.The number of user-ids to remain enrolled past the 14-day boundary divided by number of user-ids to complete checkout is also dependent on the experiment since the result is a good decision parameter to decide whether the experiment had a positive impact.
+
+- Net conversion: This metric is not a good invariant metric because the enrolled users are dependent on the experiment.Again, this ratio will also be a good decision parameter whether the experiment is successful or not.
+
+In order to launch the experiment following the hypothesis assumed to be correct, there will be a change in all the evaluation metrics but not in the same direction:
+
+- The gross conversion rate will have practically significant decrease since the number of enrollments will be filtered by the screener as a result of which the number of frustrated students likely to drop out will decrease.
+- The net conversion will not have statistically significant difference, which will decide whether the introduced filter will affect the revenues. In fact, considering the goals, the net converison should not decrease(it should either increase or remain the same) as number of enrolled students should remain the same.
+- The student retention beyond the 14 day period should also not decrease.
+
+#Measuring Standard Deviation
+The standard deviation of the gross conversion is:
+
+```{r stdev_gross_conv, echo=FALSE}
+stdev_funct<- function(p =0.20625, N = 5000 * 0.08)
+{
+  return(sqrt((p*(1-p))/N))
+}
+stdev_funct()
+```
+***
+
+The standard deviation of the net_conversion is:
+```{r net_conv, echo=FALSE}
+p_net = 0.1093125
+N_net = 5000 * 0.08 
+stdev_funct(p_net, N_net)
+```
+
+Gross conversion and net conversion both have the number of cookies as their denominator, which is also our unit of diversion. The analytical estimate is expected to be mostly accurate, but collecting an empirical estimate to verify if one has time will be favorable.
+
+The standard deviation of the retention is:
+```{r stdev_retention, echo=FALSE}
+p_ret = 0.53
+N_ret = 5000 * 0.08 * 0.20625
+stdev_funct(p_ret, N_ret)
+```
+***
+
+The unit of analysis in case of retention is user-id and unit of diversion for the experiment is a cookie, both of which are different and therfore the analytical estimate will be different from the empirical estimate.
+
+#Sizing
+###Number of Samples vs. Power
+
+I chose not to use the Bonferroni method of correction, since I find the metrics to be dependent on each other and this method will be too conservative to use.
+
+###Calculating the pageviews:
+
+####Gross conversion:
+
+- Baseline Conversion rate: 20.625%
+- Minimum Detectable Effect: 1%
+- alpha: 5%
+- beta: 20%
+- sample size = 25,835 
+- clicks/pageview: 3200/40000 = .08 
+- pageviews = 2*(25,835/.08) = 645875
+
+####Retention:
+
+- Baseline Conversion rate: 53%
+- Minimum Detectable Effect: 1%
+- alpha: 5%
+- beta: 20%
+- sample size = 39,115
+- enrollments/pageview: 660/40000 = 0.0165
+- pageviews = 2 * (39115/ 0.0165) = 4,741,212
+
+####Net conversion:
+
+- Baseline Conversion: 10.9313%
+- Minimum Detectable Effect: .75%
+- alpha: 5%
+- beta: 20%
+- sample size = 27,413 enrollments/group
+- clicks/pageview: 3200/40000 = .08 clicks/pageview
+- pageviews = 685325
+
+###Duration vs. Exposure
+
+If we redirect 100% of the traffic to our experiment then the number of days for all the metrics will be:
+
+- Gross conversion 
+```{r echo=FALSE}
+duration_gross_conv <- 645875/(40000)
+duration_gross_conv
+```
+***
+- Retention
+```{r echo=FALSE}
+duration_retention <- 4741212/(40000)
+duration_retention
+```
+***
+- Net_conversion
+```{r echo=FALSE}
+duration_net_conv <- 685325/(40000)
+duration_net_conv
+```
+***
+Looking at the above results, we can see that if we use retention as a metric, then the duration of the experiment will be very long, 119 days approx. Therefore, we can drop retention as a metric and proceed with net conversion since the sample size is large.
+
+Therefore, redirecting 100% of the traffic with a population size of 685325, the duration of the experiment will be 17 days which is a relatively short amount of time.
+
+Diverting 100% of the traffic wouldn't be a risky task, as this experiment is not collecting any sensitive information from the users, neither it is causing any physical harm to the users. The option of selecting number of hours is just used to filter the new users and this is not affecting the existing enrollments as well.
+
+#Experiment Analysis
+
+###Sanity checks
+
+Calculating the upper and lower bounds for a 95% confidence interval as a Bernoulli distribution with probability 0.5,
+
+- Number of Cookies:
+```{r echo=FALSE}
+
+st_dev = function(tot_control_group = 345543 , tot_expt_group = 344660)
+{
+  standard_dev = sqrt((0.5*0.5)/(tot_control_group + tot_expt_group))
+  margin_of_error = 1.96 * standard_dev
+  lower_bound = round(0.5 - margin_of_error,4)
+  upper_bound = round(0.5 + margin_of_error,4)
+  observed = round(tot_control_group/(tot_control_group + tot_expt_group),4)
+  return(c(lower_bound,upper_bound,observed))
+}
+st_dev()
+```
+***
+- lower_bound = 0.4988
+- upper_bound = 0.5012
+- observed_value = 0.5006
+
+Since the observed value is within the bounds, this invariant metric passed the sanity check.
+
+- Number of clicks on "start free trial"
+```{r echo = FALSE}
+control_group_tot = 28378
+experiment_group_total = 28325
+st_dev(control_group_tot,experiment_group_total)
+```
+***
+- lower_bound = 0.4959
+- upper_bound = 0.5041
+- observed_value = 0.5005
+
+Since the observed value is within the bounds, this invariant metric passed the sanity check.
+
+- Click-through-probability on "start free trial"
+```{r echo=FALSE}
+tot_control_group = 345543
+tot_expt_group = 344660
+p_control = round(control_group_tot/tot_control_group,4)
+stdev_prob = stdev_funct(p_control,tot_expt_group)
+stdev_prob
+margin_of_error = 1.96 * stdev_prob
+lower_bound_click = round(p_control - margin_of_error,4)
+upper_bound_click = round(p_control + margin_of_error,4)
+observed_value = round(experiment_group_total/tot_expt_group,4)
+lower_bound_click
+upper_bound_click
+observed_value
+
+```
+***
+- lower bound = 0.0812
+- upper bound = 0.0830
+- observed value = 0.0822
+
+Since the observed value is within the bounds, this invariant metric passed the sanity check.
+
+#Result Analysis
+####Effect Size Tests
+
+- Gross conversion:
+```{r echo=FALSE}
+N_cnt = 17293
+X_cnt = 3785
+N_exp = 17260
+X_exp = 3423
+
+p_pool = (X_cnt + X_exp) / (N_cnt + N_exp)
+se_pool = sqrt(p_pool * (1-p_pool) * (1/N_cnt + 1/N_exp))
+d = X_exp / N_exp - X_cnt / N_cnt
+margin_of_error = 1.96 * se_pool
+lower = d - margin_of_error
+lower
+upper = d + margin_of_error
+upper
+
+```
+***
+- lower bound = -0.0291
+- upper bound = -0.0120
+
+Since the interval doesnot contain 0, this metric is statistically significant. Also it does not include the practical significance boundary, dmin = 0.01, which means it is practically significant as well. This means we can be confident with a 95% confidence that the true change is large enough to launch the experiment.
+
+- Net conversion:
+```{r echo= FALSE}
+N_cnt = 17293
+X_cnt = 2033
+N_exp = 17260
+X_exp = 1945
+
+p_pool = (X_cnt + X_exp) / (N_cnt + N_exp)
+se_pool = sqrt(p_pool * (1-p_pool) * (1/N_cnt + 1/N_exp))
+d = X_exp / N_exp - X_cnt / N_cnt
+margin_error = 1.96 * se_pool
+lower = d - margin_error
+lower
+upper = d + margin_error 
+upper
+```
+***
+- lower bound = -0.0116
+- upper bound = 0.0019
+
+Since this interval contains 0, it is not statistically and practically significant.
+
+####Sign Tests
+
+- For gross conversion, using the online calculator, we find that the number of improvements in the experiment over the control group is 4 out of 23 days.
+Using a probability of 0.5, the p-value 0.0026, which is smaller than alpha = 0.05. Therefore the change is statistical significant.
+
+- For net conversion, the number of days we see an improvement in experiment group is 10 out of total 23 days of experiment. Using a probablity of 0.5, the p-value is 0.6776, which is larger than alpha = 0.05. Therefore the change is not statistical significant.
+
+#Summary
+I decide not to use Bonferroni correction because, the experiment requires the null hypothesis to be rejected for ALL the evaluation metrics and the difference must match or must be more than the practical significance boundary. The launch of this experiment should not be influenced by the statistical error.Since, in ALL case, we are more impacted by false negatives than false positives, and the correction reduces the false positives at the expense of false negatives, the Bonferroni correction should not be used. The false negatives increases as the number of metrics increases, and this is not consistent with the acceptance criteria.
+
+In both the cases of effect size hypothesis and sign tests, the net conversion is neither statistically nor practically significant. Therefore, looking at this, we cannot be confident enough to launch the experiment.
+
+The gross conversion was statistically and practically significant but the experiment will reduce the gross conversion.
+
+#Recommendation
+Based on the above analysis, the gross conversion was negative and practically significant. This will lead to lowering the total expense by decreasing the enrollments that will not convert later after the trial period. But the net conversion was both statistically and practically insignificant.The CI of net conversion includes negative of net conversion practical significance boundary. So, the number of enrollments retained past the trial could decrease.Therefore,I recommend not to launch the experiment as this might cause a decrease in the total revenue and will also lead to a decrease in number of student enrollments. Therefore, it will be favorable to try other experiments.
+
+#Follow up experiment
+
+In most cases, students enroll in an Udacity course, when they have time or there is a requirement of some course for their career or classroom syllabus.So, it may happen, that initially the student has time and so he/she will continue enrolling with the course, but after a few days some tasks may come which can force the student to dedicate a small amount of time. A student cannot decide before hand the fixed time they need in order to pursue the course. 
+
+Therefore, if there is an option of "cancellation with full refund" after "one month" post the 14 day free trial period, of taking the course, this might increase the number of student enrollments which lead them to complete the course. Considering the structure of the courses Udacity designs, within one month the student may develop an interest for the course, which might not result in cancelling the course. 
+
+- Null Hypothesis: Using this option will not significantly increase the retention rate. 
+
+- Unit of diversion: It will be the user-id since the change takes place after student enrolls in the course using the accound id.
+
+- Invariant metric: The invariant metric will be the number of user ids.
+
+- Evaluation metric: The evaluation metric will be the retention rate.
